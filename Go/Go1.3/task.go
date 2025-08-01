@@ -3,10 +3,10 @@ import "fmt"
 
 func main () {
     // Задание 1. Как объявить переменные в Go
-    /*var c int
-    var d int = 9
+    /*var a int
+    var b int = 9
     
-    e := 100 */
+    c := 100 */
 
     // Задание 2: функция для суммы двух чисел
     fmt.Println ("2 задание:")
@@ -23,10 +23,10 @@ func main () {
     // Задание 4: напишите условие, которое проверяет, является ли число положительным
     fmt.Println ("\n4 задание:")
     num := -140
-    if isPositive(num) {
+    if num > 0 {
         fmt.Println ("положительное")
     } else {
-        fmt.Println ("отрицательное")
+        fmt.Println (" не положительное")
     }
 
     // Задание 5. Объявите массив из 3 целых чисел
@@ -64,8 +64,4 @@ func main () {
 func sum (a int, b int) int {
     sum := a + b
     return sum
-}
-
-func isPositive (num int)bool {
-    return num > 0
 }
