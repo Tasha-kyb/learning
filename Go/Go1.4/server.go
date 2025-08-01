@@ -20,6 +20,6 @@ func main() {
     http.HandleFunc("/about", func(w http.ResponseWriter, r *http.Request) {
         fmt.Fprintf(w, "О нас")
     })
-    fmt.Println("Сервер запущен: http://localhost:8080")
+    fmt.Println("Сервер запущен: http://localhost:8080/time")
     http.ListenAndServe(":8080", nil)
 }
