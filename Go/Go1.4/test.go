@@ -1,20 +1,34 @@
 package main
-import (
-	"fmt"
-	"sort"
-)
-
-// Напишите функцию SumArray(arr []int) int, которая возвращает сумму всех чисел в массиве.
-// Напишите функцию FindMax(arr []int) int, которая находит максимальное число в массиве.
-//Напишите функцию CountPositives(arr []int) int, 
-// которая возвращает количество положительных чисел в массиве.
-// Напишите функцию FindMin(arr []int) int, которая возвращает минимальное число в массиве.
-// Напишите функцию Average(arr []int) float64, которая возвращает среднее арифметическое чисел массива.
+import "fmt"
 
 func main () {
-nums := []int{5, 2, 7, 1}
-sort.Ints(nums) // Использует Quick Sort под капотом
-fmt.Println(nums) // [1 2 5 7]	
-sort.Sort(sort.Reverse(sort.IntSlice(nums)))
-fmt.Println(nums)
+    nums := []int {1,2,3,4,5}
+    target := 4
+
+    result := binarySearch (nums, target)
+    if result == -1 {
+        fmt.Println ("Результат не найден")
+    } else {
+        fmt.Printf ("Элемент %d найден на позиции %d", target, result)
+    }
+}
+
+func binarySearch (arr []int, target int) int {
+    low :=0
+    high := len(arr)-1
+
+    for low <= high {
+        mid := low + (high-low)/2
+
+        if arr[mid] == target {
+            return mid
+        }
+        if arr[mid] < target {
+            low = mid +1
+        } else {
+            high = mid -1
+        }
+    }
+
+    return -1
 }

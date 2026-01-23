@@ -9,14 +9,11 @@ func (q *Queue) Enqueue(value int) {
 	q.values = append (q.values, value)
 }
 
-func (q *Queue) Dequeue() (int, bool) {
-	if len(q.values) == 0 {
-		return 0, false
-	}
+func (q *Queue) Dequeue() (int) {
 
 	value := q.values[0]
 	q.values = q.values[1:]
-	return value, true
+	return value
 }
 
 func main() {
