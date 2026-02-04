@@ -2,16 +2,14 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 
 	"github.com/internal/model"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-/*type ExpenseRepositoryT struct {
-	pool *pgxpool.Pool
-}*/
 
 type ProfileRepositoryT struct {
 	pool *pgxpool.Pool
@@ -61,23 +59,66 @@ func (p *ProfileRepositoryT) Create(ctx context.Context, profile *model.Profile)
 	return nil
 }
 
-/*func (r *AddExpenseT) AddCategory(userID int) (domain.ExpenseServiceT, error) {
-	if userID
-}*/
-
-/*func (r ExpenseRepositoryT) CreateExpense(expense domain.ExpenseT) (domain.ExpenseT, error) {
-
+func (p *ProfileRepositoryT) AddCategory(ctx context.Context, category *model.Category) (int, error) {
 	query := `
-	SELECT user_id FROM users WHERE user_id = $1
-	`
-	if query
-	err := r.pool.QueryRow(query, id).Scan(
-		&expense.UserID,
-	)
+	INSERT INTO categories (user_id, name, color) 
+	VALUES ($1, $2, $3)
+	ON CONFLICT (user_id, name) DO NOTHING
+	RETURNING id`
+	var id int
+	err := p.pool.QueryRow(ctx, query, category.UserID, category.Name, category.Color).Scan(&id)
 
 	if err != nil {
-		return domain.ExpenseT{}, fmt.Errorf("create list: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, fmt.Errorf("Категория %s уже существует", category.Name)
+		}
+		log.Printf("Ошибка при создании категории: %v", err)
+		return 0, fmt.Errorf("Ошибка при создании категории: %w", err)
 	}
+	return id, nil
+}
+func (p *ProfileRepositoryT) GetAllCategories(ctx context.Context, userID int64) ([]model.Category, error) {
+	query := `
+	SELECT id, name, color
+	FROM categories WHERE user_id = $1
+	ORDER by user_id
+	`
+	rows, err := p.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("Ошибка запроса категорий из базы данных, %w", err)
+	}
+	defer rows.Close()
 
-	return expense, nil
-}*/
+	var allCategories []model.Category
+	for rows.Next() {
+		var category model.Category
+		err := rows.Scan(
+			&category.Name,
+			&category.Color,
+			&category.ID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("Ошибка при получении списка категорий, %w", err)
+		}
+		allCategories = append(allCategories, category)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("Ошибка при чтении категорий, %w", err)
+	}
+	if allCategories == nil {
+		allCategories = []model.Category{}
+	}
+	return allCategories, nil
+}
+func (p *ProfileRepositoryT) DeleteCategory(ctx context.Context, userID int64, id int) (string, error) {
+	query := `
+	DELETE FROM categories WHERE user_id = $1 AND id = $2
+	RETURNING name`
+	var name string
+	err := p.pool.QueryRow(ctx, query, userID, id).Scan(&name)
+	if err != nil {
+		log.Printf("Ошибка при удалении категории: %v", err)
+		return "", fmt.Errorf("Ошибка при удалении категории: %w", err)
+	}
+	return name, nil
+}

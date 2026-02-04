@@ -9,7 +9,7 @@ import (
 	"github.com/internal/handlers"
 	"github.com/internal/repository"
 	"github.com/internal/repository/database"
-	"github.com/internal/service"
+	"github.com/internal/usecase"
 	"github.com/joho/godotenv"
 )
 
@@ -24,20 +24,27 @@ func main() {
 	}
 	defer pool.Close()
 	fmt.Println("Подключение к БД")
-	profileRepo := repository.NewProfileRepo(pool)
-	profileService := service.NewProfileService(profileRepo)
-	httpServer := handlers.NewProfileHandler(profileService)
-	router := http.NewServeMux()
 
-	router.HandleFunc("/start", httpServer.Create)
-	http.ListenAndServe(":8080", router)
-	/*bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_BOT_TOKEN"))
-	if err != nil {
-		log.Fatal("Не получилось подключиться к Телеграмм")
-		panic("Не получилось подключиться к Телеграмм")
+	profileRepo := repository.NewProfileRepo(pool)
+	profileService := usecase.NewProfileService(profileRepo)
+
+	// REST API обработчик
+	httpHandler := handlers.NewProfileHandler(profileService)
+
+	// TG обработчик
+	tgHandler := handlers.NewTelegramUpdates(profileService)
+
+	// запуск ТГ бота в фоне
+	go tgHandler.StartUpdates()
+
+	router := handlers.NewRouter(httpHandler)
+
+	log.Println("ТГ бот запущен ")
+	log.Println("HTTP сервер запущен на :8080")
+
+	if err := http.ListenAndServe(":8080", router); err != nil {
+		log.Fatalf("Ошибка сервера, %v", err)
 	}
-	router.HandleFunc("/start", httpServer.Create)
-	http.ListenAndServe(":8080", router)*/
 
 	log.Println("Бот остановлен")
 }
