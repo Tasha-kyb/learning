@@ -39,7 +39,6 @@ func main() {
 
 	router := handlers.NewRouter(httpHandler)
 
-	log.Println("ТГ бот запущен ")
 	log.Println("HTTP сервер запущен на :8080")
 
 	if err := http.ListenAndServe(":8080", router); err != nil {

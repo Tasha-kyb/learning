@@ -19,12 +19,12 @@ func NewProfileRepo(pool *pgxpool.Pool) *ProfileRepositoryT {
 	return &ProfileRepositoryT{pool: pool}
 }
 
-func (p *ProfileRepositoryT) Create(ctx context.Context, profile *model.Profile) error {
-	tr, err := p.pool.Begin(ctx)
+func (p *ProfileRepositoryT) CreateProfile(ctx context.Context, profile *model.Profile) error {
+	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("Не удалось начать транзакцию, %w", err)
 	}
-	defer tr.Rollback(ctx)
+	defer tx.Rollback(ctx)
 
 	userQuery := `
 	INSERT INTO users (user_id, username, created_at)
@@ -32,7 +32,7 @@ func (p *ProfileRepositoryT) Create(ctx context.Context, profile *model.Profile)
 	ON CONFLICT (user_id) DO UPDATE
 	SET username = EXCLUDED.username
 	`
-	_, err = tr.Exec(ctx, userQuery, profile.ID, profile.Username, profile.Created_at)
+	_, err = tx.Exec(ctx, userQuery, profile.ID, profile.Username, profile.Created_at)
 	if err != nil {
 		log.Printf("Ошибка при создании пользователя: %v", err)
 		return fmt.Errorf("Ошибка при создании пользователя, %w", err)
@@ -45,20 +45,19 @@ func (p *ProfileRepositoryT) Create(ctx context.Context, profile *model.Profile)
 	($1, 'Прочее')
 	ON CONFLICT (user_id, name) DO NOTHING
 	`
-	_, err = tr.Exec(ctx, categoryQuery, profile.ID)
+	_, err = tx.Exec(ctx, categoryQuery, profile.ID)
 	if err != nil {
 		log.Printf("Ошибка при создании категорий: %v", err)
 		return fmt.Errorf("Ошибка при создании категорий, %w", err)
 	}
 
-	if err = tr.Commit(ctx); err != nil {
+	if err = tx.Commit(ctx); err != nil {
 		log.Printf("Ошибка при завершении транзакции: %v", err)
 		return fmt.Errorf("Ошибка при завершении транзакции: %w", err)
 	}
 
 	return nil
 }
-
 func (p *ProfileRepositoryT) AddCategory(ctx context.Context, category *model.Category) (int, error) {
 	query := `
 	INSERT INTO categories (user_id, name, color) 
@@ -79,11 +78,11 @@ func (p *ProfileRepositoryT) AddCategory(ctx context.Context, category *model.Ca
 }
 func (p *ProfileRepositoryT) GetAllCategories(ctx context.Context, userID int64) ([]model.Category, error) {
 	query := `
-	SELECT id, name, color
+	SELECT id, name, COALESCE(color, '') as color
 	FROM categories WHERE user_id = $1
-	ORDER by user_id
+	ORDER BY id
 	`
-	rows, err := p.pool.Query(ctx, query)
+	rows, err := p.pool.Query(ctx, query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("Ошибка запроса категорий из базы данных, %w", err)
 	}
@@ -93,9 +92,9 @@ func (p *ProfileRepositoryT) GetAllCategories(ctx context.Context, userID int64)
 	for rows.Next() {
 		var category model.Category
 		err := rows.Scan(
+			&category.ID,
 			&category.Name,
 			&category.Color,
-			&category.ID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("Ошибка при получении списка категорий, %w", err)
@@ -121,4 +120,62 @@ func (p *ProfileRepositoryT) DeleteCategory(ctx context.Context, userID int64, i
 		return "", fmt.Errorf("Ошибка при удалении категории: %w", err)
 	}
 	return name, nil
+}
+func (p *ProfileRepositoryT) AddExpense(ctx context.Context, expense *model.Expense) (*model.Expense, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("Не удалось начать транзакцию, %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var profileExsist bool
+	err = tx.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM users WHERE user_id = $1)`,
+		expense.UserID).Scan(&profileExsist)
+	if err != nil {
+		return nil, fmt.Errorf("Ошибка проверки наличия пользователя в базе данных, %w", err)
+	}
+	if !profileExsist {
+		return nil, fmt.Errorf("Пользователь c ID %d еще не зарегистрирован", expense.UserID)
+	}
+
+	var categoryExist bool
+	err = tx.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM categories WHERE user_id = $1 AND name = $2)`,
+		expense.UserID, expense.Category).Scan(&categoryExist)
+	if err != nil {
+		return nil, fmt.Errorf("Ошибка проверки категории, %w", err)
+	}
+	if !categoryExist {
+		return nil, fmt.Errorf("Указанная категория не найдена в базе данных, %w", err)
+	}
+
+	query := `
+	INSERT INTO expenses (user_id, amount, category, description, created_at) 
+	VALUES ($1, $2, $3, $4, $5) 
+	RETURNING user_id, amount, category, description, created_at
+	`
+	var response model.Expense
+	err = tx.QueryRow(ctx, query,
+		expense.UserID,
+		expense.Amount,
+		expense.Category,
+		expense.Description,
+		expense.Created_at,
+	).Scan(
+		&response.UserID,
+		&response.Amount,
+		&response.Category,
+		&response.Description,
+		&response.Created_at,
+	)
+	if err != nil {
+		log.Printf("Ошибка при создании расхода, %v", err)
+		return nil, fmt.Errorf("Ошибка при создании расхода, %w", err)
+	}
+	if err = tx.Commit(ctx); err != nil {
+		log.Printf("Ошибка при завершении транзакции: %v", err)
+		return nil, fmt.Errorf("Ошибка при завершении транзакции: %w", err)
+	}
+	return &response, nil
 }

@@ -9,6 +9,7 @@ import (
 type ProfileUseCase interface {
 	CreateProfile(ctx context.Context, req model.Profile) (string, error)
 	AddCategory(ctx context.Context, req model.Category) (string, error)
-	GetAllCategories(ctx context.Context, userID int64) ([]model.Category, error)
+	GetAllCategories(ctx context.Context, userID int64) ([]model.CategoryResponse, error)
 	DeleteCategory(ctx context.Context, userID int64, id int) (string, error)
+	AddExpense(ctx context.Context, expence *model.Expense) (string, error)
 }

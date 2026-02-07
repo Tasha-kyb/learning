@@ -12,18 +12,23 @@ type Profile struct {
 
 type Category struct {
 	UserID int64  `json:"user_id"`
+	ID     int    `json:"id"`
 	Name   string `json:"name"`
 	Color  string `json:"color,omitempty"`
-	ID     int    `json:"-"`
 }
 
-type ExpenseT struct {
-	ID         int       `json:"id"`
-	Username   string    `json:"username"`
-	Category   int       `json:"category"`
-	Amount     float64   `json:"amount"`
-	Text       string    `json:"text"`
-	Created_at time.Time `json:"created_at"`
+type CategoryResponse struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color,omitempty"`
+}
+
+type Expense struct {
+	UserID      int64     `json:"user_id"`
+	Amount      float64   `json:"amount"`
+	Category    string    `json:"category"`
+	Description string    `json:"description"`
+	Created_at  time.Time `json:"created_at"`
 }
 
 type TelegramUpdate struct {

@@ -26,7 +26,7 @@ func (p *ProfileServiceT) CreateProfile(ctx context.Context, req model.Profile) 
 		Username:   req.Username,
 		Created_at: time.Now(),
 	}
-	err := p.repository.Create(ctx, newProfile)
+	err := p.repository.CreateProfile(ctx, newProfile)
 	if err != nil {
 		return "", fmt.Errorf("❌ Ошибка при создании профиля, %w", err)
 	}
@@ -44,7 +44,6 @@ func (p *ProfileServiceT) CreateProfile(ctx context.Context, req model.Profile) 
 `
 	return startMassage, nil
 }
-
 func (p *ProfileServiceT) AddCategory(ctx context.Context, req model.Category) (string, error) {
 	if strings.TrimSpace(req.Name) == "" {
 		return "", errors.New("❌ Не хватает параметров для создания категории")
@@ -71,18 +70,17 @@ func (p *ProfileServiceT) AddCategory(ctx context.Context, req model.Category) (
 
 	return addCategoryMassage, nil
 }
-
-func (p *ProfileServiceT) GetAllCategories(ctx context.Context, userID int64) ([]model.Category, error) {
+func (p *ProfileServiceT) GetAllCategories(ctx context.Context, userID int64) ([]model.CategoryResponse, error) {
 	categoriesDB, err := p.repository.GetAllCategories(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("❌ Ошибка при получении категорий: %w", err)
 	}
 	if categoriesDB == nil {
-		return []model.Category{}, nil
+		return []model.CategoryResponse{}, nil
 	}
-	var allCategories []model.Category
+	var allCategories []model.CategoryResponse
 	for _, categoryDB := range categoriesDB {
-		category := model.Category{
+		category := model.CategoryResponse{
 			Name:  categoryDB.Name,
 			Color: categoryDB.Color,
 			ID:    categoryDB.ID,
@@ -90,16 +88,19 @@ func (p *ProfileServiceT) GetAllCategories(ctx context.Context, userID int64) ([
 		allCategories = append(allCategories, category)
 	}
 	if allCategories == nil {
-		allCategories = []model.Category{}
+		allCategories = []model.CategoryResponse{}
 	}
 	return allCategories, nil
 }
 func (p *ProfileServiceT) DeleteCategory(ctx context.Context, userID int64, id int) (string, error) {
-	if id == 0 {
-		return "", errors.New("❌ Ошибка: некорректно указан id категории: %")
+	if id <= 0 {
+		return "", errors.New("❌ Ошибка: некорректно указан id категории")
 	}
 	categoryName, err := p.repository.DeleteCategory(ctx, userID, id)
 	if err != nil {
+		if strings.Contains(err.Error(), "no rows in result set") {
+			return "", fmt.Errorf("❌ Ошибка: некорректно указан ID категории")
+		}
 		return "", fmt.Errorf("❌ Ошибка при удалении категории: %w", err)
 	}
 	deleteCategoryMassage := fmt.Sprintf(`
@@ -107,4 +108,41 @@ func (p *ProfileServiceT) DeleteCategory(ctx context.Context, userID int64, id i
 	Все расходы из этой категории перенесены в "Прочее"
 	`, categoryName)
 	return deleteCategoryMassage, nil
+}
+func (p *ProfileServiceT) AddExpense(ctx context.Context, req *model.Expense) (string, error) {
+	if req.Amount <= 0 {
+		return "", errors.New("❌ Сумма расхода должна быть положительной")
+	}
+	if req.Category == "" || req.Description == "" {
+		return "", errors.New("❌ Не хватает данных для добавления расхода")
+	}
+	if req.Created_at.IsZero() {
+		req.Created_at = time.Now()
+	}
+	newExpense := &model.Expense{
+		UserID:      req.UserID,
+		Amount:      req.Amount,
+		Category:    req.Category,
+		Description: req.Description,
+		Created_at:  req.Created_at,
+	}
+	expense, err := p.repository.AddExpense(ctx, newExpense)
+	if err != nil {
+		if strings.Contains(err.Error(), "не найдена в базе данных") {
+			return "", fmt.Errorf("❌ Категория \"%s\" не найдена", req.Category)
+		}
+		return "", fmt.Errorf("❌ Ошибка при создании расхода %w", err)
+	}
+	addExpenseMessege := fmt.Sprintf(`
+	✅ Расход добавлен!
+
+	💰 Сумма: %.2f₽
+	📂 Категория: %s
+	📝 Описание: %s
+	📅 Дата: %s
+
+	💵 Осталось до лимита: X
+	`, expense.Amount, expense.Category, expense.Description, expense.Created_at.Format("02.01.2006"))
+
+	return addExpenseMessege, nil
 }

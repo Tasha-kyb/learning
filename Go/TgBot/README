@@ -5,4 +5,4 @@ docker-compose up -d
 go run cmd/main.go
 
 # 3. Запустить приложение
-docker-compose up -d && go run cmd/main.go
+docker-compose up -d postgres && go run cmd/main.go

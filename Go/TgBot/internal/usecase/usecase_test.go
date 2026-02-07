@@ -10,15 +10,16 @@ import (
 )
 
 type MockRepository struct {
-	CreateFunc           func(ctx context.Context, profile *model.Profile) error
+	CreateProfileFunc    func(ctx context.Context, profile *model.Profile) error
 	AddCategoryFunc      func(ctx context.Context, category *model.Category) (int, error)
 	GetAllCategoriesFunc func(ctx context.Context, userID int64) ([]model.Category, error)
 	DeleteCategoryFunc   func(ctx context.Context, userID int64, id int) (string, error)
+	AddExpenseFunc       func(ctx context.Context, expense *model.Expense) (*model.Expense, error)
 }
 
-func (m MockRepository) Create(ctx context.Context, profile *model.Profile) error {
-	if m.CreateFunc != nil {
-		return m.CreateFunc(ctx, profile)
+func (m MockRepository) CreateProfile(ctx context.Context, profile *model.Profile) error {
+	if m.CreateProfileFunc != nil {
+		return m.CreateProfileFunc(ctx, profile)
 	}
 	return nil
 }
@@ -39,6 +40,12 @@ func (m MockRepository) DeleteCategory(ctx context.Context, userID int64, id int
 		return m.DeleteCategoryFunc(ctx, userID, id)
 	}
 	return "", nil
+}
+func (m MockRepository) AddExpense(ctx context.Context, expense *model.Expense) (*model.Expense, error) {
+	if m.AddExpenseFunc != nil {
+		return m.AddExpenseFunc(ctx, expense)
+	}
+	return &model.Expense{}, nil
 }
 
 func TestCreateProfile(t *testing.T) {
@@ -86,7 +93,7 @@ func TestCreateProfile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := &MockRepository{
-				CreateFunc: tt.mockFunc,
+				CreateProfileFunc: tt.mockFunc,
 			}
 			service := NewProfileService(mockRepo)
 			message, err := service.CreateProfile(context.Background(), tt.input)
@@ -105,7 +112,6 @@ func TestCreateProfile(t *testing.T) {
 
 	t.Log("Тест завершен")
 }
-
 func TestAddCategory(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -117,7 +123,7 @@ func TestAddCategory(t *testing.T) {
 		{
 			name:  "Успешное создание категории",
 			input: model.Category{ID: 123456, Name: "Спорт"},
-			mockFunc: func(ctx context.Context, profile *model.Category) (int, error) {
+			mockFunc: func(ctx context.Context, category *model.Category) (int, error) {
 				return 123456, nil
 			},
 			wantError:   false,
@@ -126,7 +132,7 @@ func TestAddCategory(t *testing.T) {
 		{
 			name:  "Ошибка: ID = 0",
 			input: model.Category{ID: 0, Name: "Спорт"},
-			mockFunc: func(ctx context.Context, profile *model.Category) (int, error) {
+			mockFunc: func(ctx context.Context, category *model.Category) (int, error) {
 				return 0, nil
 			},
 			wantError: true,
@@ -134,7 +140,7 @@ func TestAddCategory(t *testing.T) {
 		{
 			name:  "Ошибка: нет названия категории",
 			input: model.Category{ID: 123456, Name: ""},
-			mockFunc: func(ctx context.Context, profile *model.Category) (int, error) {
+			mockFunc: func(ctx context.Context, category *model.Category) (int, error) {
 				return 0, nil
 			},
 			wantError: true,
@@ -142,7 +148,7 @@ func TestAddCategory(t *testing.T) {
 		{
 			name:  "Ошибка в репозитории",
 			input: model.Category{ID: 123456, Name: "Спорт"},
-			mockFunc: func(ctx context.Context, profile *model.Category) (int, error) {
+			mockFunc: func(ctx context.Context, category *model.Category) (int, error) {
 				return 0, errors.New("Ошибка БД")
 			},
 			wantError: true,
@@ -272,6 +278,102 @@ func TestDeleteCategory(t *testing.T) {
 			}
 			if !tt.wantError && !strings.Contains(message, tt.wantMessage) {
 				t.Error("Ожидалась сообщение об успешной регистрации, но его нет")
+			}
+		})
+	}
+
+	t.Log("Тест завершен")
+}
+func TestAddExpense(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       model.Expense
+		mockFunc    func(ctx context.Context, expense *model.Expense) (*model.Expense, error)
+		wantError   bool
+		wantMessage string
+	}{
+		{
+			name:  "Успешное создание расхода",
+			input: model.Expense{UserID: 1, Amount: 123, Category: "Транспорт", Description: "Поездка в трамвае"},
+			mockFunc: func(ctx context.Context, expense *model.Expense) (*model.Expense, error) {
+				return expense, nil
+			},
+			wantError:   false,
+			wantMessage: "✅ Расход добавлен!",
+		},
+		{
+			name:  "Расход отрицательный",
+			input: model.Expense{UserID: 1, Amount: -123, Category: "Категория", Description: "Поездка в трамвае"},
+			mockFunc: func(ctx context.Context, expense *model.Expense) (*model.Expense, error) {
+				return nil, errors.New("Сумма расхода должна быть положительной")
+			},
+			wantError: true,
+		},
+		{
+			name:  "Расход нулевой",
+			input: model.Expense{UserID: 1, Amount: 0, Category: "Категория", Description: "Поездка в трамвае"},
+			mockFunc: func(ctx context.Context, expense *model.Expense) (*model.Expense, error) {
+				return nil, errors.New("Не хватает данных для добавления расхода: расход равен нулю")
+			},
+			wantError: true,
+		},
+		{
+			name:  "Не указана категория",
+			input: model.Expense{UserID: 1, Amount: 123, Category: "", Description: "Поездка в трамвае"},
+			mockFunc: func(ctx context.Context, expense *model.Expense) (*model.Expense, error) {
+				return nil, errors.New("Не хватает данных для добавления расхода: не указана категория")
+			},
+			wantError: true,
+		},
+		{
+			name:  "Не указано описание",
+			input: model.Expense{UserID: 1, Amount: 123, Category: "Категория", Description: ""},
+			mockFunc: func(ctx context.Context, expense *model.Expense) (*model.Expense, error) {
+				return nil, errors.New("Не хватает данных для добавления расхода: не указано описание")
+			},
+			wantError: true,
+		},
+		{
+			name:  "Категория не найдена в БД",
+			input: model.Expense{UserID: 1, Amount: 123, Category: "Космос", Description: "Поездка в трамвае"},
+			mockFunc: func(ctx context.Context, expense *model.Expense) (*model.Expense, error) {
+				return nil, errors.New("Указанная категория не найдена в базе данных")
+			},
+			wantError: true,
+		},
+		{
+			name:  "Не хватает описания расхода",
+			input: model.Expense{UserID: 1, Amount: 123, Category: "Космос", Description: ""},
+			mockFunc: func(ctx context.Context, expense *model.Expense) (*model.Expense, error) {
+				return nil, errors.New("Не хватает описания расхода")
+			},
+			wantError: true,
+		},
+		{
+			name:  "Ошибка в репозитории",
+			input: model.Expense{UserID: 1, Amount: 123, Category: "Космос", Description: "Поездка в трамвае"},
+			mockFunc: func(ctx context.Context, expense *model.Expense) (*model.Expense, error) {
+				return nil, errors.New("Ошибка БД")
+			},
+			wantError: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := &MockRepository{
+				AddExpenseFunc: tt.mockFunc,
+			}
+			service := NewProfileService(mockRepo)
+			message, err := service.AddExpense(context.Background(), &tt.input)
+			if !tt.wantError && err != nil {
+				t.Error("Ошибка не ожидалась, но ее получили")
+
+			}
+			if tt.wantError && err == nil {
+				t.Error("Ожидалась ошибка, но ее нет")
+			}
+			if !tt.wantError && !strings.Contains(message, tt.wantMessage) {
+				t.Error("Ожидалась сообщение об успешном добавлении категории, но его нет")
 			}
 		})
 	}
