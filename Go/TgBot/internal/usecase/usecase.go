@@ -30,7 +30,7 @@ func (p *ProfileServiceT) CreateProfile(ctx context.Context, req model.Profile) 
 	if err != nil {
 		return "", fmt.Errorf("❌ Ошибка при создании профиля, %w", err)
 	}
-	startMassage := `
+	startMessage := `
 	👋 Добро пожаловать в Expense Tracker!
 
 	Я помогу вам отслеживать расходы и управлять бюджетами.
@@ -42,7 +42,7 @@ func (p *ProfileServiceT) CreateProfile(ctx context.Context, req model.Profile) 
    • Развлечения
    • Прочее
 `
-	return startMassage, nil
+	return startMessage, nil
 }
 func (p *ProfileServiceT) AddCategory(ctx context.Context, req model.Category) (string, error) {
 	if strings.TrimSpace(req.Name) == "" {
@@ -60,7 +60,7 @@ func (p *ProfileServiceT) AddCategory(ctx context.Context, req model.Category) (
 		}
 		return "", fmt.Errorf("❌ Ошибка при создании категории, %w", err)
 	}
-	addCategoryMassage := fmt.Sprintf(`
+	addCategoryMessage := fmt.Sprintf(`
 	✅ Категория создана!
 	📂 Название: %s
 	🎨 Цвет: %s
@@ -68,29 +68,26 @@ func (p *ProfileServiceT) AddCategory(ctx context.Context, req model.Category) (
 	Используйте этот ID для удаления категории.
 	`, req.Name, req.Color, id)
 
-	return addCategoryMassage, nil
+	return addCategoryMessage, nil
 }
-func (p *ProfileServiceT) GetAllCategories(ctx context.Context, userID int64) ([]model.CategoryResponse, error) {
+func (p *ProfileServiceT) GetAllCategories(ctx context.Context, userID int64) (string, error) {
 	categoriesDB, err := p.repository.GetAllCategories(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("❌ Ошибка при получении категорий: %w", err)
+		return "", fmt.Errorf("❌ Ошибка при получении категорий: %w", err)
 	}
-	if categoriesDB == nil {
-		return []model.CategoryResponse{}, nil
+	if len(categoriesDB) == 0 {
+		return "У вас пока нет категорий. \nСоздать категорию можно командой /category add", nil
 	}
-	var allCategories []model.CategoryResponse
-	for _, categoryDB := range categoriesDB {
-		category := model.CategoryResponse{
-			Name:  categoryDB.Name,
-			Color: categoryDB.Color,
-			ID:    categoryDB.ID,
+	response := "📂 Ваши категории:\n\n"
+	for _, category := range categoriesDB {
+		response += fmt.Sprintf("%s\n\n", category.Name)
+		if category.Color != "" {
+			response += fmt.Sprintf("%s\n\n", category.Color)
 		}
-		allCategories = append(allCategories, category)
+		response += fmt.Sprintf("ID: %d\n", category.ID)
 	}
-	if allCategories == nil {
-		allCategories = []model.CategoryResponse{}
-	}
-	return allCategories, nil
+	response += "\n💡 Используйте ID для удаления категории"
+	return response, nil
 }
 func (p *ProfileServiceT) DeleteCategory(ctx context.Context, userID int64, id int) (string, error) {
 	if id <= 0 {
@@ -133,7 +130,7 @@ func (p *ProfileServiceT) AddExpense(ctx context.Context, req *model.Expense) (s
 		}
 		return "", fmt.Errorf("❌ Ошибка при создании расхода %w", err)
 	}
-	addExpenseMessege := fmt.Sprintf(`
+	addExpenseMessage := fmt.Sprintf(`
 	✅ Расход добавлен!
 
 	💰 Сумма: %.2f₽
@@ -144,5 +141,63 @@ func (p *ProfileServiceT) AddExpense(ctx context.Context, req *model.Expense) (s
 	💵 Осталось до лимита: X
 	`, expense.Amount, expense.Category, expense.Description, expense.Created_at.Format("02.01.2006"))
 
-	return addExpenseMessege, nil
+	return addExpenseMessage, nil
+}
+func (p *ProfileServiceT) TodayExpense(ctx context.Context, userID int64) (string, error) {
+	expenses, err := p.repository.TodayExpense(ctx, userID)
+	if err != nil {
+		return "", fmt.Errorf("❌ Ошибка при при получении расходов за сегодня %w", err)
+	}
+	today := time.Now().Format("02.01.2006")
+	if len(expenses) == 0 {
+		return fmt.Sprintf(`📊 Расходы за сегодня (%s)
+		
+		Пока нет расходов за сегодня.
+		Используйте /add для добавления расхода.`, today), nil
+	}
+	categoriesMap := make(map[string][]model.Expense)
+
+	for _, expense := range expenses {
+		categoriesMap[expense.Category] = append(categoriesMap[expense.Category], expense)
+	}
+
+	response := fmt.Sprintf("📊 Расходы за сегодня (%s)\n\n", today)
+	total := 0.0
+
+	for category, expenseList := range categoriesMap {
+		sum := 0.0
+		for _, exp := range expenseList {
+			sum += exp.Amount
+		}
+		response += fmt.Sprintf("%s: %.2f₽\n", category, sum)
+
+		for _, exp := range expenseList {
+			response += fmt.Sprintf("   • %s: %.2f₽\n", exp.Description, exp.Amount)
+		}
+		total += sum
+	}
+	response += "\n━━━━━━━━━━━━━━━━━━━━\n"
+	response += fmt.Sprintf("💰 Итого: %.2f₽", total)
+
+	return response, nil
+}
+func (p *ProfileServiceT) WeekExpense(ctx context.Context, userID int64) (string, error) {
+	expenses, err := p.repository.WeekExpense(ctx, userID)
+	if err != nil {
+		return "", fmt.Errorf("❌ Ошибка при при получении расходов за неделю %w", err)
+	}
+
+	if len(expenses) == 0 {
+		return "📊 Нет расходов за неделю", nil
+	}
+
+	total := 0.0
+	for _, exp := range expenses {
+		total += exp.Amount
+	}
+	response := fmt.Sprintf(`📊 Расходы за неделю 
+	💰 Итого: %.2f₽
+	📈 Средний расход в день: %.2f₽`, total, total/7)
+
+	return response, nil
 }

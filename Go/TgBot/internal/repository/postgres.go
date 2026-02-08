@@ -30,8 +30,7 @@ func (p *ProfileRepositoryT) CreateProfile(ctx context.Context, profile *model.P
 	INSERT INTO users (user_id, username, created_at)
 	VALUES ($1, $2, $3)
 	ON CONFLICT (user_id) DO UPDATE
-	SET username = EXCLUDED.username
-	`
+	SET username = EXCLUDED.username`
 	_, err = tx.Exec(ctx, userQuery, profile.ID, profile.Username, profile.Created_at)
 	if err != nil {
 		log.Printf("Ошибка при создании пользователя: %v", err)
@@ -43,8 +42,7 @@ func (p *ProfileRepositoryT) CreateProfile(ctx context.Context, profile *model.P
 	($1, 'Транспорт'), 
 	($1, 'Развлечения'), 
 	($1, 'Прочее')
-	ON CONFLICT (user_id, name) DO NOTHING
-	`
+	ON CONFLICT (user_id, name) DO NOTHING`
 	_, err = tx.Exec(ctx, categoryQuery, profile.ID)
 	if err != nil {
 		log.Printf("Ошибка при создании категорий: %v", err)
@@ -80,8 +78,7 @@ func (p *ProfileRepositoryT) GetAllCategories(ctx context.Context, userID int64)
 	query := `
 	SELECT id, name, COALESCE(color, '') as color
 	FROM categories WHERE user_id = $1
-	ORDER BY id
-	`
+	ORDER BY id`
 	rows, err := p.pool.Query(ctx, query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("Ошибка запроса категорий из базы данных, %w", err)
@@ -128,14 +125,14 @@ func (p *ProfileRepositoryT) AddExpense(ctx context.Context, expense *model.Expe
 	}
 	defer tx.Rollback(ctx)
 
-	var profileExsist bool
+	var profileExist bool
 	err = tx.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM users WHERE user_id = $1)`,
-		expense.UserID).Scan(&profileExsist)
+		expense.UserID).Scan(&profileExist)
 	if err != nil {
 		return nil, fmt.Errorf("Ошибка проверки наличия пользователя в базе данных, %w", err)
 	}
-	if !profileExsist {
+	if !profileExist {
 		return nil, fmt.Errorf("Пользователь c ID %d еще не зарегистрирован", expense.UserID)
 	}
 
@@ -178,4 +175,69 @@ func (p *ProfileRepositoryT) AddExpense(ctx context.Context, expense *model.Expe
 		return nil, fmt.Errorf("Ошибка при завершении транзакции: %w", err)
 	}
 	return &response, nil
+}
+func (p *ProfileRepositoryT) TodayExpense(ctx context.Context, userID int64) ([]model.Expense, error) {
+	query := `
+	SELECT amount, category, description, created_at
+	FROM expenses 
+	WHERE user_id = $1 AND DATE(created_at) = CURRENT_DATE
+	ORDER BY created_at DESC`
+	rows, err := p.pool.Query(ctx, query, userID)
+	if err != nil {
+		log.Printf("Ошибка при получении расхода за текщий день, %v", err)
+		return nil, fmt.Errorf("Ошибка при получении расхода за текщий день, %v", err)
+	}
+	defer rows.Close()
+
+	var expenses []model.Expense
+	for rows.Next() {
+		var expense model.Expense
+		err := rows.Scan(
+			&expense.Amount,
+			&expense.Category,
+			&expense.Description,
+			&expense.Created_at,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("Ошибка при сканировании расхода за текщий день, %w", err)
+		}
+		expenses = append(expenses, expense)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("Ошибка при сканировании расходов, %w", err)
+	}
+
+	return expenses, nil
+}
+func (p *ProfileRepositoryT) WeekExpense(ctx context.Context, userID int64) ([]model.Expense, error) {
+	query := `
+	SELECT amount, category, created_at
+	FROM expenses 
+	WHERE user_id = $1 AND DATE_TRUNC('week', created_at) = DATE_TRUNC('week', CURRENT_DATE)
+	ORDER BY created_at DESC`
+	rows, err := p.pool.Query(ctx, query, userID)
+	if err != nil {
+		log.Printf("Ошибка при получении расхода за текщую неделю, %v", err)
+		return nil, fmt.Errorf("Ошибка при получении расхода за текущую неделю, %v", err)
+	}
+	defer rows.Close()
+
+	var expenses []model.Expense
+	for rows.Next() {
+		var expense model.Expense
+		err := rows.Scan(
+			&expense.Amount,
+			&expense.Category,
+			&expense.Created_at,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("Ошибка при сканировании расхода за текущую неделю, %w", err)
+		}
+		expenses = append(expenses, expense)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("Ошибка при сканировании расходов, %w", err)
+	}
+
+	return expenses, nil
 }

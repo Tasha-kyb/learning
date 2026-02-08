@@ -109,3 +109,41 @@ func (p *ProfileHandlerT) AddExpense(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(response)
 }
+func (p *ProfileHandlerT) TodayExpense(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		UserID int64 `json:"user_id"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		http.Error(w, `{"error": "Некорректный JSON"}`, http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+	expenses, err := p.usecase.TodayExpense(r.Context(), request.UserID)
+	if err != nil {
+		log.Printf("Ошибка получения расходов, %v", err)
+		http.Error(w, `{"error": "Внутренняя ошибка сервера"}`, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(expenses)
+}
+func (p *ProfileHandlerT) WeekExpense(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		UserID int64 `json:"user_id"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		http.Error(w, `{"error": "Некорректный JSON"}`, http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+	expenses, err := p.usecase.WeekExpense(r.Context(), request.UserID)
+	if err != nil {
+		log.Printf("Ошибка получения расходов, %v", err)
+		http.Error(w, `{"error": "Внутренняя ошибка сервера"}`, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(expenses)
+}

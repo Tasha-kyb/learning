@@ -18,9 +18,9 @@ func NewRouter(profileHandler *ProfileHandlerT) *RouterT {
 	router.HandleFunc("/categories", profileHandler.GetAllCategories).Methods("POST")
 	router.HandleFunc("/category/delete", profileHandler.DeleteCategory).Methods("POST")
 	router.HandleFunc("/add", profileHandler.AddExpense).Methods("POST")
-	/*router.HandleFunc("/today", profileHandler.).Methods("POST")
-	router.HandleFunc("/week", profileHandler.).Methods("POST")
-	router.HandleFunc("/month", profileHandler.).Methods("POST")
+	router.HandleFunc("/today", profileHandler.TodayExpense).Methods("POST")
+	router.HandleFunc("/week", profileHandler.WeekExpense).Methods("POST")
+	/*router.HandleFunc("/month", profileHandler.).Methods("POST")
 	router.HandleFunc("/stats", profileHandler.).Methods("POST")*/
 
 	return &RouterT{router: router}

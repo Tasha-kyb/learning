@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -50,8 +49,8 @@ func (t *TelegramHandlerT) StartUpdates() {
 			response, err := t.usecase.CreateProfile(ctx, profile)
 
 			if err != nil {
-				log.Printf("Ошибка создания профиля, %v", err)
-				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "❌Ошибка создания профиля"))
+				log.Printf("Ошибка при создании профиля, %v", err)
+				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, err.Error()))
 				continue
 			}
 			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, response))
@@ -89,25 +88,10 @@ func (t *TelegramHandlerT) StartUpdates() {
 
 			if err != nil {
 				log.Printf("Ошибка получения категорий, %v", err)
-				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID,
-					"❌Ошибка при получении категорий"))
+				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, err.Error()))
 				continue
 			}
-			if len(categories) == 0 {
-				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID,
-					"❌У вас пока нет категорий. \nСоздать категорию можно командой /category add"))
-				continue
-			}
-			response := "📂 Ваши категории:\n\n"
-			for _, category := range categories {
-				response += fmt.Sprintf("%s\n\n", category.Name)
-				if category.Color != "" {
-					response += fmt.Sprintf("%s\n\n", category.Color)
-				}
-				response += fmt.Sprintf("ID: %d\n", category.ID)
-			}
-			response += "\n💡 Используйте ID для удаления категории"
-			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, response))
+			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, categories))
 		case strings.HasPrefix(update.Message.Text, "/category delete"):
 			parts := strings.Fields(update.Message.Text)
 			if len(parts) < 3 {
@@ -135,6 +119,7 @@ func (t *TelegramHandlerT) StartUpdates() {
 		case update.Message.Text == "/help":
 			helpText := `
 			📖 Доступные команды:
+
 			💰 Расходы:
 			/add <сумма> <категория> <описание> — добавить расход
 			/today — расходы за сегодня
@@ -171,12 +156,12 @@ func (t *TelegramHandlerT) StartUpdates() {
 				continue
 			}
 			category := parts[2]
-			discription := strings.Join(parts[3:], " ")
+			description := strings.Join(parts[3:], " ")
 			newExpense := model.Expense{
 				UserID:      int64(update.Message.From.ID),
 				Amount:      amount,
 				Category:    category,
-				Description: discription,
+				Description: description,
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -185,6 +170,28 @@ func (t *TelegramHandlerT) StartUpdates() {
 
 			if err != nil {
 				log.Printf("Ошибка создания расхода, %v", err)
+				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, err.Error()))
+				continue
+			}
+			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, response))
+		case update.Message.Text == "/today":
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			response, err := t.usecase.TodayExpense(ctx, update.Message.From.ID)
+			if err != nil {
+				log.Printf("Ошибка получения расходов за сегодня, %v", err)
+				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, err.Error()))
+				continue
+			}
+			bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, response))
+		case update.Message.Text == "/week":
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			response, err := t.usecase.WeekExpense(ctx, update.Message.From.ID)
+			if err != nil {
+				log.Printf("Ошибка получения расходов за неделю, %v", err)
 				bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, err.Error()))
 				continue
 			}
