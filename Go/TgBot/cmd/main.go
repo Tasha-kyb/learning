@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/internal/handlers"
 	"github.com/internal/repository"
@@ -15,6 +19,7 @@ import (
 
 func main() {
 	godotenv.Load()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -28,22 +33,42 @@ func main() {
 	profileRepo := repository.NewProfileRepo(pool)
 	profileService := usecase.NewProfileService(profileRepo)
 
-	// REST API обработчик
 	httpHandler := handlers.NewProfileHandler(profileService)
-
-	// TG обработчик
-	tgHandler := handlers.NewTelegramUpdates(profileService)
-
-	// запуск ТГ бота в фоне
-	go tgHandler.StartUpdates()
-
 	router := handlers.NewRouter(httpHandler)
 
-	log.Println("HTTP сервер запущен на :8080")
-
-	if err := http.ListenAndServe(":8080", router); err != nil {
-		log.Fatalf("Ошибка сервера, %v", err)
+	tgHandler, err := handlers.NewTelegramUpdates(profileService)
+	if err != nil {
+		log.Fatalf("Ошибка создания соединения с Telegram ботом: %v", err)
 	}
 
-	log.Println("Бот остановлен")
+	go tgHandler.StartUpdates(ctx)
+
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: router,
+	}
+	go func() {
+		log.Println("HTTP сервер запущен на :8080")
+		if err := server.ListenAndServe(); err != nil {
+			log.Printf("Ошибка сервера, %v", err)
+		}
+	}()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	<-sigChan
+	log.Println("Получен сигнал, завершаем работу")
+	cancel()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(
+		context.Background(),
+		10*time.Second,
+	)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Fatalf("Ошибка при остановке сервера: %v", err)
+	}
+
+	log.Println("Приложение завершено")
 }
