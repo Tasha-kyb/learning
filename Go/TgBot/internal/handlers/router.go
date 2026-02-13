@@ -10,18 +10,18 @@ type RouterT struct {
 	router *mux.Router
 }
 
-func NewRouter(profileHandler *ProfileHandlerT) *RouterT {
+func NewRouter(handler *HandlerT) *RouterT {
 	router := mux.NewRouter()
 
-	router.HandleFunc("/start", profileHandler.CreateProfile).Methods("POST")
-	router.HandleFunc("/addCategory", profileHandler.AddCategory).Methods("POST")
-	router.HandleFunc("/categories", profileHandler.GetAllCategories).Methods("POST")
-	router.HandleFunc("/category/delete", profileHandler.DeleteCategory).Methods("POST")
-	router.HandleFunc("/add", profileHandler.AddExpense).Methods("POST")
-	router.HandleFunc("/today", profileHandler.TodayExpense).Methods("POST")
-	router.HandleFunc("/week", profileHandler.WeekExpense).Methods("POST")
-	/*router.HandleFunc("/month", profileHandler.).Methods("POST")
-	router.HandleFunc("/stats", profileHandler.).Methods("POST")*/
+	router.HandleFunc("/start", handler.CreateProfile).Methods("POST")
+	router.HandleFunc("/addCategory", handler.AddCategory).Methods("POST")
+	router.HandleFunc("/categories", handler.GetAllCategories).Methods("POST")
+	router.HandleFunc("/category/delete", handler.DeleteCategory).Methods("POST")
+	router.HandleFunc("/add", handler.AddExpense).Methods("POST")
+	router.HandleFunc("/today", handler.TodayExpense).Methods("POST")
+	router.HandleFunc("/week", handler.WeekExpense).Methods("POST")
+	router.HandleFunc("/month", handler.MonthExpense).Methods("POST")
+	router.HandleFunc("/stats", handler.StatsExpense).Methods("POST")
 
 	return &RouterT{router: router}
 }

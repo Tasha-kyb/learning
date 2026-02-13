@@ -8,15 +8,15 @@ import (
 	"github.com/internal/model"
 )
 
-type ProfileHandlerT struct {
-	usecase ProfileUseCase
+type HandlerT struct {
+	usecase UseCase
 }
 
-func NewProfileHandler(usecase ProfileUseCase) *ProfileHandlerT {
-	return &ProfileHandlerT{usecase: usecase}
+func NewHandler(usecase UseCase) *HandlerT {
+	return &HandlerT{usecase: usecase}
 }
 
-func (p *ProfileHandlerT) CreateProfile(w http.ResponseWriter, r *http.Request) {
+func (p *HandlerT) CreateProfile(w http.ResponseWriter, r *http.Request) {
 	var profile model.Profile
 	err := json.NewDecoder(r.Body).Decode(&profile)
 	if err != nil {
@@ -34,7 +34,7 @@ func (p *ProfileHandlerT) CreateProfile(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(response)
 }
-func (p *ProfileHandlerT) AddCategory(w http.ResponseWriter, r *http.Request) {
+func (p *HandlerT) AddCategory(w http.ResponseWriter, r *http.Request) {
 	var category model.Category
 	err := json.NewDecoder(r.Body).Decode(&category)
 	if err != nil {
@@ -52,7 +52,7 @@ func (p *ProfileHandlerT) AddCategory(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(response)
 }
-func (p *ProfileHandlerT) GetAllCategories(w http.ResponseWriter, r *http.Request) {
+func (p *HandlerT) GetAllCategories(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		UserID int64 `json:"user_id"`
 	}
@@ -71,7 +71,7 @@ func (p *ProfileHandlerT) GetAllCategories(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(categories)
 }
-func (p *ProfileHandlerT) DeleteCategory(w http.ResponseWriter, r *http.Request) {
+func (p *HandlerT) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		UserID int64 `json:"user_id"`
 		ID     int   `json:"id"`
@@ -91,7 +91,7 @@ func (p *ProfileHandlerT) DeleteCategory(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 }
-func (p *ProfileHandlerT) AddExpense(w http.ResponseWriter, r *http.Request) {
+func (p *HandlerT) AddExpense(w http.ResponseWriter, r *http.Request) {
 	var expense model.Expense
 	err := json.NewDecoder(r.Body).Decode(&expense)
 	if err != nil {
@@ -109,7 +109,7 @@ func (p *ProfileHandlerT) AddExpense(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(response)
 }
-func (p *ProfileHandlerT) TodayExpense(w http.ResponseWriter, r *http.Request) {
+func (p *HandlerT) TodayExpense(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		UserID int64 `json:"user_id"`
 	}
@@ -128,7 +128,7 @@ func (p *ProfileHandlerT) TodayExpense(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(expenses)
 }
-func (p *ProfileHandlerT) WeekExpense(w http.ResponseWriter, r *http.Request) {
+func (p *HandlerT) WeekExpense(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		UserID int64 `json:"user_id"`
 	}
@@ -139,6 +139,44 @@ func (p *ProfileHandlerT) WeekExpense(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 	expenses, err := p.usecase.WeekExpense(r.Context(), request.UserID)
+	if err != nil {
+		log.Printf("Ошибка получения расходов, %v", err)
+		http.Error(w, `{"error": "Внутренняя ошибка сервера"}`, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(expenses)
+}
+func (p *HandlerT) MonthExpense(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		UserID int64 `json:"user_id"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		http.Error(w, `{"error": "Некорректный JSON"}`, http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+	expenses, err := p.usecase.MonthExpense(r.Context(), request.UserID)
+	if err != nil {
+		log.Printf("Ошибка получения расходов, %v", err)
+		http.Error(w, `{"error": "Внутренняя ошибка сервера"}`, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(expenses)
+}
+func (p *HandlerT) StatsExpense(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		UserID int64 `json:"user_id"`
+	}
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		http.Error(w, `{"error": "Некорректный JSON"}`, http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+	expenses, err := p.usecase.StatsExpense(r.Context(), request.UserID)
 	if err != nil {
 		log.Printf("Ошибка получения расходов, %v", err)
 		http.Error(w, `{"error": "Внутренняя ошибка сервера"}`, http.StatusInternalServerError)

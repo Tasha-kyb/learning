@@ -30,13 +30,13 @@ func main() {
 	defer pool.Close()
 	fmt.Println("Подключение к БД")
 
-	profileRepo := repository.NewProfileRepo(pool)
-	profileService := usecase.NewProfileService(profileRepo)
+	repo := repository.NewRepo(pool)
+	service := usecase.NewService(repo)
 
-	httpHandler := handlers.NewProfileHandler(profileService)
+	httpHandler := handlers.NewHandler(service)
 	router := handlers.NewRouter(httpHandler)
 
-	tgHandler, err := handlers.NewTelegramUpdates(profileService)
+	tgHandler, err := handlers.NewTelegramUpdates(service)
 	if err != nil {
 		log.Fatalf("Ошибка создания соединения с Telegram ботом: %v", err)
 	}

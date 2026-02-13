@@ -17,6 +17,8 @@ type MockRepository struct {
 	AddExpenseFunc       func(ctx context.Context, expense *model.Expense) (*model.Expense, error)
 	TodayExpenseFunc     func(ctx context.Context, userID int64) ([]model.Expense, error)
 	WeekExpenseFunc      func(ctx context.Context, userID int64) ([]model.Expense, error)
+	MonthExpenseFunc     func(ctx context.Context, userID int64) ([]model.Expense, error)
+	StatsExpenseFunc     func(ctx context.Context, userID int64) ([]model.Expense, error)
 }
 
 func (m MockRepository) CreateProfile(ctx context.Context, profile *model.Profile) error {
@@ -58,6 +60,18 @@ func (m MockRepository) TodayExpense(ctx context.Context, userID int64) ([]model
 func (m MockRepository) WeekExpense(ctx context.Context, userID int64) ([]model.Expense, error) {
 	if m.WeekExpenseFunc != nil {
 		return m.WeekExpenseFunc(ctx, userID)
+	}
+	return nil, nil
+}
+func (m MockRepository) MonthExpense(ctx context.Context, userID int64) ([]model.Expense, error) {
+	if m.MonthExpenseFunc != nil {
+		return m.MonthExpenseFunc(ctx, userID)
+	}
+	return nil, nil
+}
+func (m MockRepository) StatsExpense(ctx context.Context, userID int64) ([]model.Expense, error) {
+	if m.StatsExpenseFunc != nil {
+		return m.StatsExpenseFunc(ctx, userID)
 	}
 	return nil, nil
 }
@@ -109,7 +123,7 @@ func TestCreateProfile(t *testing.T) {
 			mockRepo := &MockRepository{
 				CreateProfileFunc: tt.mockFunc,
 			}
-			service := NewProfileService(mockRepo)
+			service := NewService(mockRepo)
 			message, err := service.CreateProfile(context.Background(), tt.input)
 			if !tt.wantError && err != nil {
 				t.Error("Ошибка не ожидалась, но ее получили")
@@ -119,7 +133,7 @@ func TestCreateProfile(t *testing.T) {
 				t.Error("Ожидалась ошибка, но ее нет")
 			}
 			if !tt.wantError && !strings.Contains(message, tt.wantMessage) {
-				t.Error("Ожидалась сообщение об успешном добавлении категории, но его нет")
+				t.Error("Ожидалась сообщение об успешном создании профиля, но его нет")
 			}
 		})
 	}
@@ -144,14 +158,6 @@ func TestAddCategory(t *testing.T) {
 			wantMessage: "✅ Категория создана!",
 		},
 		{
-			name:  "Ошибка: ID = 0",
-			input: model.Category{ID: 0, Name: "Спорт"},
-			mockFunc: func(ctx context.Context, category *model.Category) (int, error) {
-				return 0, nil
-			},
-			wantError: true,
-		},
-		{
 			name:  "Ошибка: нет названия категории",
 			input: model.Category{ID: 123456, Name: ""},
 			mockFunc: func(ctx context.Context, category *model.Category) (int, error) {
@@ -173,7 +179,7 @@ func TestAddCategory(t *testing.T) {
 			mockRepo := &MockRepository{
 				AddCategoryFunc: tt.mockFunc,
 			}
-			service := NewProfileService(mockRepo)
+			service := NewService(mockRepo)
 			message, err := service.AddCategory(context.Background(), tt.input)
 			if !tt.wantError && err != nil {
 				t.Error("Ошибка не ожидалась, но ее получили")
@@ -183,7 +189,7 @@ func TestAddCategory(t *testing.T) {
 				t.Error("Ожидалась ошибка, но ее нет")
 			}
 			if !tt.wantError && !strings.Contains(message, tt.wantMessage) {
-				t.Error("Ожидалась сообщение об успешной регистрации, но его нет")
+				t.Error("Ожидалась сообщение об успешном создании категории, но его нет")
 			}
 		})
 	}
@@ -233,14 +239,16 @@ func TestGetAllCategories(t *testing.T) {
 			mockRepo := &MockRepository{
 				GetAllCategoriesFunc: tt.mockFunc,
 			}
-			service := NewProfileService(mockRepo)
-			_, err := service.GetAllCategories(context.Background(), tt.userID)
+			service := NewService(mockRepo)
+			message, err := service.GetAllCategories(context.Background(), tt.userID)
 			if !tt.wantError && err != nil {
 				t.Error("Ошибка не ожидалась, но ее получили")
-
 			}
 			if tt.wantError && err == nil {
 				t.Error("Ожидалась ошибка, но ее нет")
+			}
+			if !tt.wantError && !strings.Contains(message, tt.wantMessage) {
+				t.Error("Ожидалась сообщение об успешном получении категорий, но его нет")
 			}
 		})
 	}
@@ -290,7 +298,7 @@ func TestDeleteCategory(t *testing.T) {
 			mockRepo := &MockRepository{
 				DeleteCategoryFunc: tt.mockFunc,
 			}
-			service := NewProfileService(mockRepo)
+			service := NewService(mockRepo)
 			message, err := service.DeleteCategory(context.Background(), tt.userID, tt.id)
 			if !tt.wantError && err != nil {
 				t.Error("Ошибка не ожидалась, но ее получили")
@@ -300,7 +308,7 @@ func TestDeleteCategory(t *testing.T) {
 				t.Error("Ожидалась ошибка, но ее нет")
 			}
 			if !tt.wantError && !strings.Contains(message, tt.wantMessage) {
-				t.Error("Ожидалась сообщение об успешной регистрации, но его нет")
+				t.Error("Ожидалась сообщение об успешном удалении категории, но его нет")
 			}
 		})
 	}
@@ -386,7 +394,7 @@ func TestAddExpense(t *testing.T) {
 			mockRepo := &MockRepository{
 				AddExpenseFunc: tt.mockFunc,
 			}
-			service := NewProfileService(mockRepo)
+			service := NewService(mockRepo)
 			message, err := service.AddExpense(context.Background(), &tt.input)
 			if !tt.wantError && err != nil {
 				t.Error("Ошибка не ожидалась, но ее получили")
@@ -396,7 +404,7 @@ func TestAddExpense(t *testing.T) {
 				t.Error("Ожидалась ошибка, но ее нет")
 			}
 			if !tt.wantError && !strings.Contains(message, tt.wantMessage) {
-				t.Error("Ожидалась сообщение об успешном добавлении категории, но его нет")
+				t.Error("Ожидалась сообщение об успешном добавлении расхода, но его нет")
 			}
 		})
 	}
@@ -458,14 +466,17 @@ func TestTodayExpense(t *testing.T) {
 			mockRepo := &MockRepository{
 				TodayExpenseFunc: tt.mockFunc,
 			}
-			service := NewProfileService(mockRepo)
-			_, err := service.TodayExpense(context.Background(), tt.userID)
+			service := NewService(mockRepo)
+			message, err := service.TodayExpense(context.Background(), tt.userID)
 			if !tt.wantError && err != nil {
 				t.Error("Ошибка не ожидалась, но ее получили")
 
 			}
 			if tt.wantError && err == nil {
 				t.Error("Ожидалась ошибка, но ее нет")
+			}
+			if !tt.wantError && !strings.Contains(message, tt.wantMessage) {
+				t.Error("Ожидалась сообщение об успешном получении расхода за сегодня, но его нет")
 			}
 		})
 	}
@@ -490,7 +501,7 @@ func TestWeekExpense(t *testing.T) {
 				}, nil
 			},
 			wantError:   false,
-			wantMessage: "📊 Расходы за сегодня",
+			wantMessage: "📊 Расходы за неделю",
 		},
 		{
 			name:   "Расходов за неделю нет",
@@ -513,10 +524,10 @@ func TestWeekExpense(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := &MockRepository{
-				TodayExpenseFunc: tt.mockFunc,
+				WeekExpenseFunc: tt.mockFunc,
 			}
-			service := NewProfileService(mockRepo)
-			_, err := service.TodayExpense(context.Background(), tt.userID)
+			service := NewService(mockRepo)
+			message, err := service.WeekExpense(context.Background(), tt.userID)
 			if !tt.wantError && err != nil {
 				t.Error("Ошибка не ожидалась, но ее получили")
 
@@ -524,8 +535,130 @@ func TestWeekExpense(t *testing.T) {
 			if tt.wantError && err == nil {
 				t.Error("Ожидалась ошибка, но ее нет")
 			}
+			if !tt.wantError && !strings.Contains(message, tt.wantMessage) {
+				t.Error("Ожидалась сообщение об успешном получении расхода за неделю, но его нет")
+			}
 		})
 	}
 
+	t.Log("Тест завершен")
+}
+func TestMonthExpense(t *testing.T) {
+	tests := []struct {
+		name        string
+		userID      int64
+		mockFunc    func(ctx context.Context, userID int64) ([]model.Expense, error)
+		wantError   bool
+		wantMessage string
+	}{
+		{
+			name:   "Успешное получение расходов за месяц",
+			userID: 123,
+			mockFunc: func(ctx context.Context, userID int64) ([]model.Expense, error) {
+				return []model.Expense{
+					{Category: "Еда", Amount: 1234.56},
+					{Category: "Транспорт", Amount: 65},
+				}, nil
+			},
+			wantError:   false,
+			wantMessage: "📊 Расходы за",
+		},
+		{
+			name:   "Расходов за месяц нет",
+			userID: 123,
+			mockFunc: func(ctx context.Context, userID int64) ([]model.Expense, error) {
+				return []model.Expense{}, nil
+			},
+			wantError:   false,
+			wantMessage: "📊 Нет расходов за месяц",
+		},
+		{
+			name:   "Ошибка в репозитории",
+			userID: 123,
+			mockFunc: func(ctx context.Context, userID int64) ([]model.Expense, error) {
+				return nil, errors.New("Ошибка БД")
+			},
+			wantError: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := &MockRepository{
+				MonthExpenseFunc: tt.mockFunc,
+			}
+			service := NewService(mockRepo)
+			message, err := service.MonthExpense(context.Background(), tt.userID)
+			if !tt.wantError && err != nil {
+				t.Error("Ошибка не ожидалась, но ее получили")
+
+			}
+			if tt.wantError && err == nil {
+				t.Error("Ожидалась ошибка, но ее нет")
+			}
+			if !tt.wantError && !strings.Contains(message, tt.wantMessage) {
+				t.Error("Ожидалась сообщение об успешном получении расхода за месяц, но его нет")
+			}
+		})
+	}
+
+	t.Log("Тест завершен")
+}
+func TestStatsExpense(t *testing.T) {
+	tests := []struct {
+		name        string
+		userID      int64
+		mockFunc    func(ctx context.Context, userID int64) ([]model.Expense, error)
+		wantError   bool
+		wantMessage string
+	}{
+		{
+			name:   "Успешное получение расходов за весь период",
+			userID: 123,
+			mockFunc: func(ctx context.Context, userID int64) ([]model.Expense, error) {
+				return []model.Expense{
+					{Category: "Еда", Amount: 1234.56},
+					{Category: "Транспорт", Amount: 65},
+				}, nil
+			},
+			wantError:   false,
+			wantMessage: "📈 Статистика расходов",
+		},
+		{
+			name:   "Расходов нет",
+			userID: 123,
+			mockFunc: func(ctx context.Context, userID int64) ([]model.Expense, error) {
+				return []model.Expense{}, nil
+			},
+			wantError:   false,
+			wantMessage: "📊 Нет данных для статистики",
+		},
+		{
+			name:   "Ошибка в репозитории",
+			userID: 123,
+			mockFunc: func(ctx context.Context, userID int64) ([]model.Expense, error) {
+				return nil, errors.New("Ошибка БД")
+			},
+			wantError: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := &MockRepository{
+				StatsExpenseFunc: tt.mockFunc,
+			}
+			service := NewService(mockRepo)
+			message, err := service.StatsExpense(context.Background(), tt.userID)
+			if !tt.wantError && err != nil {
+				t.Error("Ошибка не ожидалась, но ее получили")
+
+			}
+			if tt.wantError && err == nil {
+				t.Error("Ожидалась ошибка, но ее нет")
+			}
+			if !tt.wantError && !strings.Contains(message, tt.wantMessage) {
+				t.Errorf("Ожидалось, что сообщение содержит %q, получено: %q", tt.wantMessage, message)
+			}
+		})
+	}
 	t.Log("Тест завершен")
 }

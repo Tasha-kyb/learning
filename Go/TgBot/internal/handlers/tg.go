@@ -15,11 +15,11 @@ import (
 )
 
 type TelegramHandlerT struct {
-	usecase *usecase.ProfileServiceT
+	usecase *usecase.ServiceT
 	bot     *tgbotapi.BotAPI
 }
 
-func NewTelegramUpdates(usecase *usecase.ProfileServiceT) (*TelegramHandlerT, error) {
+func NewTelegramUpdates(usecase *usecase.ServiceT) (*TelegramHandlerT, error) {
 	bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_BOT_TOKEN"))
 	if err != nil {
 		return nil, err
@@ -234,6 +234,28 @@ func (t *TelegramHandlerT) handleMessage(update tgbotapi.Update) {
 		response, err := t.usecase.WeekExpense(ctx, update.Message.From.ID)
 		if err != nil {
 			log.Printf("Ошибка получения расходов за неделю, %v", err)
+			t.bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, err.Error()))
+			return
+		}
+		t.bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, response))
+	case update.Message.Text == "/month":
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		response, err := t.usecase.MonthExpense(ctx, update.Message.From.ID)
+		if err != nil {
+			log.Printf("Ошибка получения расходов за месяц, %v", err)
+			t.bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, err.Error()))
+			return
+		}
+		t.bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, response))
+	case update.Message.Text == "/stats":
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		response, err := t.usecase.StatsExpense(ctx, update.Message.From.ID)
+		if err != nil {
+			log.Printf("Ошибка получения расходов за весь период, %v", err)
 			t.bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, err.Error()))
 			return
 		}

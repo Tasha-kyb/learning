@@ -11,15 +11,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type ProfileRepositoryT struct {
+type RepositoryT struct {
 	pool *pgxpool.Pool
 }
 
-func NewProfileRepo(pool *pgxpool.Pool) *ProfileRepositoryT {
-	return &ProfileRepositoryT{pool: pool}
+func NewRepo(pool *pgxpool.Pool) *RepositoryT {
+	return &RepositoryT{pool: pool}
 }
 
-func (p *ProfileRepositoryT) CreateProfile(ctx context.Context, profile *model.Profile) error {
+func (p *RepositoryT) CreateProfile(ctx context.Context, profile *model.Profile) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("Не удалось начать транзакцию, %w", err)
@@ -56,7 +56,7 @@ func (p *ProfileRepositoryT) CreateProfile(ctx context.Context, profile *model.P
 
 	return nil
 }
-func (p *ProfileRepositoryT) AddCategory(ctx context.Context, category *model.Category) (int, error) {
+func (p *RepositoryT) AddCategory(ctx context.Context, category *model.Category) (int, error) {
 	query := `
 	INSERT INTO categories (user_id, name, color) 
 	VALUES ($1, $2, $3)
@@ -74,7 +74,7 @@ func (p *ProfileRepositoryT) AddCategory(ctx context.Context, category *model.Ca
 	}
 	return id, nil
 }
-func (p *ProfileRepositoryT) GetAllCategories(ctx context.Context, userID int64) ([]model.Category, error) {
+func (p *RepositoryT) GetAllCategories(ctx context.Context, userID int64) ([]model.Category, error) {
 	query := `
 	SELECT id, name, COALESCE(color, '') as color
 	FROM categories WHERE user_id = $1
@@ -106,7 +106,7 @@ func (p *ProfileRepositoryT) GetAllCategories(ctx context.Context, userID int64)
 	}
 	return allCategories, nil
 }
-func (p *ProfileRepositoryT) DeleteCategory(ctx context.Context, userID int64, id int) (string, error) {
+func (p *RepositoryT) DeleteCategory(ctx context.Context, userID int64, id int) (string, error) {
 	query := `
 	DELETE FROM categories WHERE user_id = $1 AND id = $2
 	RETURNING name`
@@ -118,7 +118,7 @@ func (p *ProfileRepositoryT) DeleteCategory(ctx context.Context, userID int64, i
 	}
 	return name, nil
 }
-func (p *ProfileRepositoryT) AddExpense(ctx context.Context, expense *model.Expense) (*model.Expense, error) {
+func (p *RepositoryT) AddExpense(ctx context.Context, expense *model.Expense) (*model.Expense, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Не удалось начать транзакцию, %w", err)
@@ -176,16 +176,18 @@ func (p *ProfileRepositoryT) AddExpense(ctx context.Context, expense *model.Expe
 	}
 	return &response, nil
 }
-func (p *ProfileRepositoryT) TodayExpense(ctx context.Context, userID int64) ([]model.Expense, error) {
+func (p *RepositoryT) TodayExpense(ctx context.Context, userID int64) ([]model.Expense, error) {
 	query := `
 	SELECT amount, category, description, created_at
 	FROM expenses 
-	WHERE user_id = $1 AND DATE(created_at) = CURRENT_DATE
-	ORDER BY created_at DESC`
+	WHERE user_id = $1 
+  		AND created_at >= (CURRENT_DATE::timestamptz AT TIME ZONE 'Europe/Moscow')::timestamp
+  		AND created_at <  (CURRENT_DATE::timestamptz AT TIME ZONE 'Europe/Moscow' + interval '1 day')::timestamp
+	ORDER BY created_at DESC;`
 	rows, err := p.pool.Query(ctx, query, userID)
 	if err != nil {
-		log.Printf("Ошибка при получении расхода за текщий день, %v", err)
-		return nil, fmt.Errorf("Ошибка при получении расхода за текщий день, %v", err)
+		log.Printf("Ошибка при получении расхода за текущий день, %v", err)
+		return nil, fmt.Errorf("Ошибка при получении расхода за текущий день, %v", err)
 	}
 	defer rows.Close()
 
@@ -199,7 +201,7 @@ func (p *ProfileRepositoryT) TodayExpense(ctx context.Context, userID int64) ([]
 			&expense.Created_at,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("Ошибка при сканировании расхода за текщий день, %w", err)
+			return nil, fmt.Errorf("Ошибка при сканировании расхода за текущий день, %w", err)
 		}
 		expenses = append(expenses, expense)
 	}
@@ -209,15 +211,17 @@ func (p *ProfileRepositoryT) TodayExpense(ctx context.Context, userID int64) ([]
 
 	return expenses, nil
 }
-func (p *ProfileRepositoryT) WeekExpense(ctx context.Context, userID int64) ([]model.Expense, error) {
+func (p *RepositoryT) WeekExpense(ctx context.Context, userID int64) ([]model.Expense, error) {
 	query := `
 	SELECT amount, category, created_at
 	FROM expenses 
-	WHERE user_id = $1 AND DATE_TRUNC('week', created_at) = DATE_TRUNC('week', CURRENT_DATE)
-	ORDER BY created_at DESC`
+	WHERE user_id = $1
+  		AND DATE_TRUNC('week', created_at) = 
+      		DATE_TRUNC('week', (CURRENT_DATE::timestamptz AT TIME ZONE 'Europe/Moscow')::timestamp)
+	ORDER BY created_at DESC;`
 	rows, err := p.pool.Query(ctx, query, userID)
 	if err != nil {
-		log.Printf("Ошибка при получении расхода за текщую неделю, %v", err)
+		log.Printf("Ошибка при получении расхода за текущую неделю, %v", err)
 		return nil, fmt.Errorf("Ошибка при получении расхода за текущую неделю, %v", err)
 	}
 	defer rows.Close()
@@ -232,6 +236,72 @@ func (p *ProfileRepositoryT) WeekExpense(ctx context.Context, userID int64) ([]m
 		)
 		if err != nil {
 			return nil, fmt.Errorf("Ошибка при сканировании расхода за текущую неделю, %w", err)
+		}
+		expenses = append(expenses, expense)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("Ошибка при сканировании расходов, %w", err)
+	}
+
+	return expenses, nil
+}
+func (p *RepositoryT) MonthExpense(ctx context.Context, userID int64) ([]model.Expense, error) {
+	query := `
+	SELECT amount, category, created_at
+	FROM expenses 
+	WHERE user_id = $1
+  		AND DATE_TRUNC('month', created_at) = 
+      		DATE_TRUNC('month', (CURRENT_DATE::timestamptz AT TIME ZONE 'Europe/Moscow')::timestamp)
+	ORDER BY created_at DESC;`
+	rows, err := p.pool.Query(ctx, query, userID)
+	if err != nil {
+		log.Printf("Ошибка при получении расхода за текущий месяц, %v", err)
+		return nil, fmt.Errorf("Ошибка при получении расхода за текущий месяц, %v", err)
+	}
+	defer rows.Close()
+
+	var expenses []model.Expense
+	for rows.Next() {
+		var expense model.Expense
+		err := rows.Scan(
+			&expense.Amount,
+			&expense.Category,
+			&expense.Created_at,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("Ошибка при сканировании расхода за текущий месяц, %w", err)
+		}
+		expenses = append(expenses, expense)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("Ошибка при сканировании расходов, %w", err)
+	}
+
+	return expenses, nil
+}
+func (p *RepositoryT) StatsExpense(ctx context.Context, userID int64) ([]model.Expense, error) {
+	query := `
+	SELECT amount, category, created_at
+	FROM expenses 
+	WHERE user_id = $1
+	ORDER BY created_at DESC`
+	rows, err := p.pool.Query(ctx, query, userID)
+	if err != nil {
+		log.Printf("Ошибка при получении расхода за весь период, %v", err)
+		return nil, fmt.Errorf("Ошибка при получении расхода за весь период, %v", err)
+	}
+	defer rows.Close()
+
+	var expenses []model.Expense
+	for rows.Next() {
+		var expense model.Expense
+		err := rows.Scan(
+			&expense.Amount,
+			&expense.Category,
+			&expense.Created_at,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("Ошибка при сканировании расхода за весь период, %w", err)
 		}
 		expenses = append(expenses, expense)
 	}
