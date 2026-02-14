@@ -8,12 +8,12 @@ func main () {
 }
 
 func containsDuplicate(nums []int) bool {
-	m := make(map[int]struct{})
+	m := make(map[int]bool)
 	for _, num := range nums {
-		if _, exist := m[num]; exist {
+		if m[num] {
 			return true
 		}
-		m[num] = struct{}{}
+		m[num] = true
 	}
 	return false
 }
